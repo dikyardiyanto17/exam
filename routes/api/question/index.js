@@ -4,7 +4,6 @@ const { Router } = require("../../router")
 class QuestionRouter extends Router {
 	static async initRouter() {
 		this.router.get("/", this.Controller.Question.index)
-		this.router.get("/zipped", this.Controller.Question.index_zip)
 		this.router.post("/", this.Controller.Question.post)
 	}
 }
