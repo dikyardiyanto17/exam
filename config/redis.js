@@ -16,6 +16,7 @@ class RedisDB {
 					socket: {
 						host: this.host.ip,
 						port: this.host.port,
+						reconnectStrategy: retries => Math.min(retries * 50, 2000),
 					},
 					password: this.host.password,
 				})
