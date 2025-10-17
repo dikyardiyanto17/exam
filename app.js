@@ -55,8 +55,8 @@ app.use(Middlewares.configuration)
 const httpServer = http.createServer(app)
 mongoose.connection.once("open", async () => {
 	await RedisDB.startRedis()
-	await httpServer.listen(Configuration.port, () => {
-		console.log("App On : " + Configuration.port)
+	await httpServer.listen(process.env.PORT, () => {
+		console.log("App On : " + process.env.PORT)
 	})
 })
 app.use(Configuration.url, MainRouter.getRouter())
