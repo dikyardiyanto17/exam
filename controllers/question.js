@@ -1,8 +1,7 @@
 const { RedisDB } = require("../config/redis")
 const { Helpers } = require("../helpers")
 const Questions = require("../schema/Questions")
-
-const memoryCache = new Map()
+const zlib = require("zlib")
 
 class Question {
 	static async index(req, res, next) {
@@ -10,44 +9,33 @@ class Question {
 			const redis = RedisDB.getClient()
 			const cacheKey = "questions:all"
 
-			// Check local memory first
-			if (memoryCache.has(cacheKey)) {
-				return res.status(200).json({
-					...Helpers.RESPONSESUCCESS.CODE_200,
-					message: "Retrieved from memory cache",
-					data: memoryCache.get(cacheKey),
-				})
-			}
-
 			// Try Redis
 			let cached
 			try {
-				cached = await redis.get(cacheKey)
+				const buffer = await redis.getBuffer(cacheKey) // get as Buffer
+				if (buffer) {
+					cached = JSON.parse(zlib.gunzipSync(buffer).toString())
+					return res.status(200).json({
+						...Helpers.RESPONSESUCCESS.CODE_200,
+						message: "Retrieved from Redis cache",
+						data: cached,
+					})
+				}
 			} catch (err) {
 				console.error("Redis error:", err.message)
-			}
-
-			if (cached) {
-				const data = JSON.parse(cached)
-				memoryCache.set(cacheKey, data) // populate local memory cache
-				return res.status(200).json({
-					...Helpers.RESPONSESUCCESS.CODE_200,
-					message: "Retrieved from Redis cache",
-					data,
-				})
 			}
 
 			// Cache miss — query MongoDB
 			const questions = await Questions.find()
 
-			// Save to Redis with expiry
+			// Save compressed to Redis
 			try {
-				await redis.set(cacheKey, JSON.stringify(questions), { EX: 7200 })
+				const compressed = zlib.gzipSync(JSON.stringify(questions))
+				await redis.set(cacheKey, compressed, { EX: 7200 }) // 2 hours expiry
 			} catch (err) {
 				console.error("Redis set error:", err.message)
 			}
 
-			memoryCache.set(cacheKey, questions) // update memory cache
 			return res.status(200).json({
 				...Helpers.RESPONSESUCCESS.CODE_200,
 				message: "Retrieved from DB",
