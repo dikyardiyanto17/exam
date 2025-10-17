@@ -29,7 +29,7 @@ const rateLimiterSetting = rateLimit({
 	},
 })
 
-app.use(rateLimiterSetting)
+// app.use(rateLimiterSetting)
 app.use(cookieParser())
 app.use(cors({ ...Configuration.allowedCors }))
 app.set("view engine", "ejs")
