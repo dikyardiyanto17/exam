@@ -1,7 +1,6 @@
 const { RedisDB } = require("../config/redis")
 const { Helpers } = require("../helpers")
 const Questions = require("../schema/Questions")
-const zlib = require("zlib")
 
 class Question {
 	static async index(req, res, next) {
@@ -9,36 +8,25 @@ class Question {
 			const redis = RedisDB.getClient()
 			const cacheKey = "questions:all"
 
-			// Try Redis
-			let cached
-			try {
-				const buffer = await redis.getBuffer(cacheKey) // get as Buffer
-				if (buffer) {
-					cached = JSON.parse(zlib.gunzipSync(buffer).toString())
-					return res.status(200).json({
-						...Helpers.RESPONSESUCCESS.CODE_200,
-						message: "Retrieved from Redis cache",
-						data: cached,
-					})
-				}
-			} catch (err) {
-				console.error("Redis error:", err.message)
+			const cached = await redis.get(cacheKey)
+			if (cached) {
+				console.log("📦 Cache hit — returning from Redis")
+				return res.status(Helpers.RESPONSESUCCESS.CODE_200.statusCode).json({
+					...Helpers.RESPONSESUCCESS.CODE_200,
+					message: "Successfully Retrieved Data (from cache)",
+					data: JSON.parse(cached),
+				})
 			}
 
-			// Cache miss — query MongoDB
+			console.log("🧠 Cache miss — querying MongoDB")
 			const questions = await Questions.find()
 
-			// Save compressed to Redis
-			try {
-				const compressed = zlib.gzipSync(JSON.stringify(questions))
-				await redis.set(cacheKey, compressed, { EX: 7200 }) // 2 hours expiry
-			} catch (err) {
-				console.error("Redis set error:", err.message)
-			}
+			// Save to Redis with expiry 2 hour
+			await redis.set(cacheKey, JSON.stringify(questions), { EX: 7200 })
 
-			return res.status(200).json({
+			return res.status(Helpers.RESPONSESUCCESS.CODE_200.statusCode).json({
 				...Helpers.RESPONSESUCCESS.CODE_200,
-				message: "Retrieved from DB",
+				message: "Successfully Retrieved Data (from DB)",
 				data: questions,
 			})
 		} catch (error) {
