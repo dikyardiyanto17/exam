@@ -2,31 +2,55 @@ const { RedisDB } = require("../config/redis")
 const { Helpers } = require("../helpers")
 const Questions = require("../schema/Questions")
 
+const memoryCache = new Map()
+
 class Question {
 	static async index(req, res, next) {
 		try {
 			const redis = RedisDB.getClient()
 			const cacheKey = "questions:all"
 
-			const cached = await redis.get(cacheKey)
-			if (cached) {
-				console.log("📦 Cache hit — returning from Redis")
-				return res.status(Helpers.RESPONSESUCCESS.CODE_200.statusCode).json({
+			// Check local memory first
+			if (memoryCache.has(cacheKey)) {
+				return res.status(200).json({
 					...Helpers.RESPONSESUCCESS.CODE_200,
-					message: "Successfully Retrieved Data (from cache)",
-					data: JSON.parse(cached),
+					message: "Retrieved from memory cache",
+					data: memoryCache.get(cacheKey),
 				})
 			}
 
-			console.log("🧠 Cache miss — querying MongoDB")
+			// Try Redis
+			let cached
+			try {
+				cached = await redis.get(cacheKey)
+			} catch (err) {
+				console.error("Redis error:", err.message)
+			}
+
+			if (cached) {
+				const data = JSON.parse(cached)
+				memoryCache.set(cacheKey, data) // populate local memory cache
+				return res.status(200).json({
+					...Helpers.RESPONSESUCCESS.CODE_200,
+					message: "Retrieved from Redis cache",
+					data,
+				})
+			}
+
+			// Cache miss — query MongoDB
 			const questions = await Questions.find()
 
-			// Save to Redis with expiry 2 hour
-			await redis.set(cacheKey, JSON.stringify(questions), { EX: 7200 })
+			// Save to Redis with expiry
+			try {
+				await redis.set(cacheKey, JSON.stringify(questions), { EX: 7200 })
+			} catch (err) {
+				console.error("Redis set error:", err.message)
+			}
 
-			return res.status(Helpers.RESPONSESUCCESS.CODE_200.statusCode).json({
+			memoryCache.set(cacheKey, questions) // update memory cache
+			return res.status(200).json({
 				...Helpers.RESPONSESUCCESS.CODE_200,
-				message: "Successfully Retrieved Data (from DB)",
+				message: "Retrieved from DB",
 				data: questions,
 			})
 		} catch (error) {
