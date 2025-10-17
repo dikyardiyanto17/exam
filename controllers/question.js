@@ -21,8 +21,8 @@ class Question {
 			console.log("🧠 Cache miss — querying MongoDB")
 			const questions = await Questions.find()
 
-			// Save to Redis with expiry (e.g. 5 minutes)
-			await redis.set(cacheKey, JSON.stringify(questions), { EX: 300 })
+			// Save to Redis with expiry 2 hour
+			await redis.set(cacheKey, JSON.stringify(questions), { EX: 7200 })
 
 			return res.status(Helpers.RESPONSESUCCESS.CODE_200.statusCode).json({
 				...Helpers.RESPONSESUCCESS.CODE_200,
